@@ -1,0 +1,8 @@
+# counterfile = "count.bin"       # file to store counter value
+# bind_addr = "127.0.0.1:1234"    # address to bind
+# image_dir = "img"               # path to directory with images of counter digits
+# img_format = "jpeg"             # digits format
+# content_type = "image/jpeg"     # Content-Type
+# count_unique = false            # Count only unique visits. Each visit timestamp is saved; if the same IP visits the site before `timeout` seconds pass, then the counter doesn't register a visit 
+# timeout = 3600                  # timeout (see comment above), in seconds
+# blacklist = ["127.0.0.1"]       # IPs listed here won't increment the counter
