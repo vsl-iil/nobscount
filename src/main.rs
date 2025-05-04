@@ -1,5 +1,5 @@
 use std::{collections::HashMap, fs::File, io::{BufRead, BufReader, BufWriter, Read, Write}, net::{IpAddr, TcpListener, TcpStream}, process::exit, str::from_utf8, time::Instant};
-use serde::Deserialize;
+use regex::Regex;
 use toml::Table;
 
 #[macro_use] mod util;
@@ -12,16 +12,17 @@ const IMG_FORMAT:   &str = "jpg";
 const CONTENT_TYPE: &str = "image/jpeg";
 const TIMEOUT:      u64  = 3600;
 
-#[derive(Deserialize)]
 struct Config {
-    counterfile: String,
-    bind_addr:   String,
-    image_dir:   String,
-    img_format:  String,
-    content_type:String,
-    count_unique:bool,
-    timeout:     u64,
-    blacklist:   Vec<IpAddr>,
+    counterfile:    String,
+    bind_addr:      String,
+    image_dir:      String,
+    img_format:     String,
+    content_type:   String,
+    count_unique:   bool,
+    timeout:        u64,
+    blacklist:      Vec<IpAddr>,
+    ua_list:        Vec<Regex>,
+    allow_empty_ua: bool
 } 
 
 impl Default for Config {
@@ -34,13 +35,17 @@ impl Default for Config {
             content_type: CONTENT_TYPE.to_owned(),
             count_unique: false,
             timeout: TIMEOUT,
-            blacklist: Vec::new()
+            blacklist: Vec::new(),
+            ua_list: Vec::new(),
+            allow_empty_ua: false
         }
     }
 }
 
 const OK: &str = "200 OK";
 const BAD_REQUEST: &str = "400 Bad Request";
+// const FORBIDDEN: &str = "403 Forbidden";
+// const TEAPOT: &str = "418 I'm a teapot";
 const INTERNAL_ERROR: &str = "500 Internal Server Error";
 
 fn main() {
@@ -54,7 +59,9 @@ fn main() {
                             config.counterfile.to_string(),
                             config.count_unique,
                             config.timeout,
-                            config.blacklist
+                            config.blacklist,
+                            config.ua_list,
+                            config.allow_empty_ua
                             );
 
     let listener = match TcpListener::bind(config.bind_addr) {
@@ -85,12 +92,14 @@ struct Counter {
     uniques: HashMap<IpAddr, Instant>,
     count_unique: bool,
     timeout: u64,
-    blacklist: Vec<IpAddr>
+    blacklist: Vec<IpAddr>,
+    ua_list: Vec<Regex>,
+    allow_empty_ua: bool
 }
 
 impl Counter {
-    pub fn new(count: usize, filepath: String, count_unique: bool, timeout: u64, blacklist: Vec<IpAddr>) -> Self {
-        Counter { count, filepath, uniques: HashMap::new(), count_unique, timeout, blacklist }
+    pub fn new(count: usize, filepath: String, count_unique: bool, timeout: u64, blacklist: Vec<IpAddr>, ua_list: Vec<Regex>, allow_empty_ua: bool) -> Self {
+        Counter { count, filepath, uniques: HashMap::new(), count_unique, timeout, blacklist, ua_list, allow_empty_ua }
     }
 
     pub fn clear_timedout(&mut self) {
@@ -124,6 +133,14 @@ impl Counter {
         }
         debugprint!(format!("New connection from {}!", ip.unwrap()));
 
+        let allowed_useragent = allow_useragent(&http_request, &self.ua_list, self.allow_empty_ua);
+        if !allowed_useragent {
+            let ua = http_request.lines()
+                                 .find_map(|l| l.strip_prefix("User-Agent: "))
+                                 .unwrap_or("[no user-agent]");
+            eprintln!("Connection filtered based on user-agent: {ua}");
+        }
+
         http_request = http_request.lines().take(1).collect();
         let http_request = http_request.trim();
         debugprint!(http_request);
@@ -145,7 +162,7 @@ impl Counter {
             match method {
                 "/increment" => {
                     if let Some(ip) = ip {
-                        if !self.blacklist.contains(&ip) {
+                        if !self.blacklist.contains(&ip) && allowed_useragent {
                             if self.count_unique {
                                 if !self.uniques.contains_key(&ip) {
                                     self.increment_counter();
@@ -337,6 +354,23 @@ fn load_config_from_file(config: &mut Config, filepath: &str) {
                 }
             }
         }
+        if fileconf.contains_key("useragent_regexes") && 
+           fileconf["useragent_regexes"].is_array() 
+        {
+            for re in fileconf["useragent_regexes"].as_array().unwrap().iter() {
+                if re.is_str() {
+                    let regex = re.as_str().unwrap();
+                    if let Ok(regex) = Regex::new(&regex) {
+                        config.ua_list.push(regex);
+                    } else {
+                        eprintln!("Not a valid regex: {regex}; check config!");
+                    }
+                }
+            }
+        }
+        if fileconf.contains_key("allow_empty_uas") && fileconf["allow_empty_uas"].is_bool() {
+            config.allow_empty_ua = fileconf["allow_empty_uas"].as_bool().unwrap();
+        }
     }
 }
 
@@ -354,4 +388,18 @@ fn check_x_real_ip(http_request: &str) -> Option<IpAddr> {
     } else {
         None
     }
+}
+
+fn allow_useragent(http_request: &str, re_list: &[Regex], allow_empty: bool) -> bool {
+    let useragent = http_request.lines()
+                                              .find(|line| line.starts_with("User-Agent: "));
+
+    if useragent.is_none() {
+        return allow_empty;
+    }
+
+    let useragent = useragent.unwrap().strip_prefix("User-Agent: ").unwrap();
+
+    !re_list.iter()
+            .any(|re| re.is_match(useragent))
 }
