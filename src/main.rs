@@ -224,12 +224,19 @@ impl Counter {
 
         counter /= 10usize.pow((no-1).into());
 
-        let digit = counter % 10;
-        assert!(digit < 10);
+        let digit;
+        if counter == 0 {
+            digit = None;
+        } else {
+            digit = Some(counter % 10);
+        }
+        assert!(digit.is_none_or(|d| d < 10));
 
         let mut status = OK;
         let mut stream = BufWriter::new(stream);
-        let filebuf = match std::fs::read(format!("{}/{}.{}", self.image_dir, digit, self.img_format)) {
+        let digit = digit.map(|d| d.to_string()).unwrap_or("empty".to_owned());
+        let filebuf = match std::fs::read(format!("{}/{}.{}", self.image_dir, digit, self.img_format)) 
+        {
             Err(e) => {
                 eprintln!("Error reading file! {e}");
                 status = INTERNAL_ERROR;
