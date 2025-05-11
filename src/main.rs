@@ -57,6 +57,9 @@ fn main() {
     let mut counter = Counter::new(
                             read_number(&config.counterfile).unwrap_or_default(), 
                             config.counterfile.to_string(),
+                            config.image_dir,
+                            config.img_format,
+                            config.content_type,
                             config.count_unique,
                             config.timeout,
                             config.blacklist,
@@ -89,6 +92,9 @@ fn main() {
 struct Counter {
     count: usize,
     filepath: String,
+    image_dir: String,
+    img_format: String,
+    content_type: String,
     uniques: HashMap<IpAddr, Instant>,
     count_unique: bool,
     timeout: u64,
@@ -98,8 +104,8 @@ struct Counter {
 }
 
 impl Counter {
-    pub fn new(count: usize, filepath: String, count_unique: bool, timeout: u64, blacklist: Vec<IpAddr>, ua_list: Vec<Regex>, allow_empty_ua: bool) -> Self {
-        Counter { count, filepath, uniques: HashMap::new(), count_unique, timeout, blacklist, ua_list, allow_empty_ua }
+    pub fn new(count: usize, filepath: String, image_dir: String, img_format: String, content_type: String, count_unique: bool, timeout: u64, blacklist: Vec<IpAddr>, ua_list: Vec<Regex>, allow_empty_ua: bool) -> Self {
+        Counter { count, filepath, image_dir, img_format, content_type, uniques: HashMap::new(), count_unique, timeout, blacklist, ua_list, allow_empty_ua }
     }
 
     pub fn clear_timedout(&mut self) {
@@ -223,7 +229,7 @@ impl Counter {
 
         let mut status = OK;
         let mut stream = BufWriter::new(stream);
-        let filebuf = match std::fs::read(format!("{IMAGE_DIR}/{digit}.{IMG_FORMAT}")) {
+        let filebuf = match std::fs::read(format!("{}/{}.{}", self.image_dir, digit, self.img_format)) {
             Err(e) => {
                 eprintln!("Error reading file! {e}");
                 status = INTERNAL_ERROR;
@@ -234,7 +240,7 @@ impl Counter {
         };
         let length = filebuf.len();
 
-        let headers = format!("HTTP/1.1 {status}\r\nContent-Type: {CONTENT_TYPE}\r\nContent-Length: {length}\r\n\r\n");
+        let headers = format!("HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n", status, self.content_type, length);
         
         if let Err(e) = stream.write(headers.as_bytes()) {
             eprintln!("Error writing bytes to stream buffer! {e}");
