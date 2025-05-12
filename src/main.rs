@@ -322,68 +322,78 @@ fn read_number(filepath: &str) -> Option<usize> {
 }
 
 fn load_config_from_file(config: &mut Config, filepath: &str) {
-    let file_contents = std::fs::read_to_string(filepath).unwrap_or_default();
-    if let Ok(fileconf) = file_contents.parse::<Table>() {
-        if fileconf.contains_key("counterfile") && fileconf["counterfile"].is_str() {
-            config.counterfile = fileconf["counterfile"].as_str().unwrap().to_owned();
-        }
-        if fileconf.contains_key("bind_addr") && fileconf["bind_addr"].is_str() {
-            config.bind_addr = fileconf["bind_addr"].as_str().unwrap().to_owned();
-        }
-        if fileconf.contains_key("image_dir") && fileconf["image_dir"].is_str() {
-            config.image_dir = fileconf["image_dir"].as_str().unwrap().to_owned();
-        }
-        if fileconf.contains_key("img_format") && fileconf["img_format"].is_str() {
-            config.img_format = fileconf["img_format"].as_str().unwrap().to_owned();
-        }
-        if fileconf.contains_key("content_type") && fileconf["content_type"].is_str() {
-            config.content_type = fileconf["content_type"].as_str().unwrap().to_owned();
-        }
-        if fileconf.contains_key("count_unique") && fileconf["count_unique"].is_bool() {
-            config.count_unique = fileconf["count_unique"].as_bool().unwrap().to_owned();
-        }
-        if fileconf.contains_key("timeout") && fileconf["timeout"].is_integer() {
-            config.timeout = fileconf["timeout"].as_integer().unwrap().to_owned() as u64;
-        }
-        if fileconf.contains_key("blacklist") && 
-           fileconf["blacklist"].is_array() &&
-           fileconf["blacklist"].as_array().unwrap().iter().all(|v| v.is_str()) {
-            for ip_str in fileconf["blacklist"].as_array()
-                                                    .unwrap()
-                                                    .iter() 
-            {
-                let ip = ip_str.as_str().map(|ip| ip.parse::<IpAddr>().ok());
-                if let Some(ip_parsed) = ip {
-                    if let Some(ip_valid) = ip_parsed {
-                        debugprint!("Adding IP", ip_valid);
-                        config.blacklist.push(ip_valid);
+    let file_contents = match std::fs::read_to_string(filepath) {
+        Ok(contents) => contents,
+        Err(e) => {
+            eprintln!("Error reading config: {e}; Using default settings");
+            return;
+        },
+    };
+
+    match file_contents.parse::<Table>() {
+        Ok(fileconf) => {
+            if fileconf.contains_key("counterfile") && fileconf["counterfile"].is_str() {
+                config.counterfile = fileconf["counterfile"].as_str().unwrap().to_owned();
+            }
+            if fileconf.contains_key("bind_addr") && fileconf["bind_addr"].is_str() {
+                config.bind_addr = fileconf["bind_addr"].as_str().unwrap().to_owned();
+            }
+            if fileconf.contains_key("image_dir") && fileconf["image_dir"].is_str() {
+                config.image_dir = fileconf["image_dir"].as_str().unwrap().to_owned();
+            }
+            if fileconf.contains_key("img_format") && fileconf["img_format"].is_str() {
+                config.img_format = fileconf["img_format"].as_str().unwrap().to_owned();
+            }
+            if fileconf.contains_key("content_type") && fileconf["content_type"].is_str() {
+                config.content_type = fileconf["content_type"].as_str().unwrap().to_owned();
+            }
+            if fileconf.contains_key("count_unique") && fileconf["count_unique"].is_bool() {
+                config.count_unique = fileconf["count_unique"].as_bool().unwrap().to_owned();
+            }
+            if fileconf.contains_key("timeout") && fileconf["timeout"].is_integer() {
+                config.timeout = fileconf["timeout"].as_integer().unwrap().to_owned() as u64;
+            }
+            if fileconf.contains_key("blacklist") && 
+            fileconf["blacklist"].is_array() &&
+            fileconf["blacklist"].as_array().unwrap().iter().all(|v| v.is_str()) {
+                for ip_str in fileconf["blacklist"].as_array()
+                                                        .unwrap()
+                                                        .iter() 
+                {
+                    let ip = ip_str.as_str().map(|ip| ip.parse::<IpAddr>().ok());
+                    if let Some(ip_parsed) = ip {
+                        if let Some(ip_valid) = ip_parsed {
+                            debugprint!("Adding IP", ip_valid);
+                            config.blacklist.push(ip_valid);
+                        } else {
+                            eprintln!("A blacklist IP {ip_str} isn't a valid IP; check config!");
+                            continue;
+                        }
                     } else {
-                        eprintln!("A blacklist IP {ip_str} isn't a valid IP; check config!");
+                        eprintln!("A blacklist IP {ip_str} isn't a valid string; check config!");
                         continue;
                     }
-                } else {
-                    eprintln!("A blacklist IP {ip_str} isn't a valid string; check config!");
-                    continue;
                 }
             }
-        }
-        if fileconf.contains_key("useragent_regexes") && 
-           fileconf["useragent_regexes"].is_array() 
-        {
-            for re in fileconf["useragent_regexes"].as_array().unwrap().iter() {
-                if re.is_str() {
-                    let regex = re.as_str().unwrap();
-                    if let Ok(regex) = Regex::new(&regex) {
-                        config.ua_list.push(regex);
-                    } else {
-                        eprintln!("Not a valid regex: {regex}; check config!");
+            if fileconf.contains_key("useragent_regexes") && 
+            fileconf["useragent_regexes"].is_array() 
+            {
+                for re in fileconf["useragent_regexes"].as_array().unwrap().iter() {
+                    if re.is_str() {
+                        let regex = re.as_str().unwrap();
+                        if let Ok(regex) = Regex::new(&regex) {
+                            config.ua_list.push(regex);
+                        } else {
+                            eprintln!("Not a valid regex: {regex}; check config!");
+                        }
                     }
                 }
             }
-        }
-        if fileconf.contains_key("allow_empty_uas") && fileconf["allow_empty_uas"].is_bool() {
-            config.allow_empty_ua = fileconf["allow_empty_uas"].as_bool().unwrap();
-        }
+            if fileconf.contains_key("allow_empty_uas") && fileconf["allow_empty_uas"].is_bool() {
+                config.allow_empty_ua = fileconf["allow_empty_uas"].as_bool().unwrap();
+            }
+        },
+        Err(e) => eprintln!("Error parsing config: {e}; using default settings"),
     }
 }
 
