@@ -180,14 +180,18 @@ impl Counter {
                             }
                         }
                     }
-                    respond(&mut stream, OK);
+                    if let Err(e) = respond(&mut stream, OK, Some("text/javascript")) {
+                        eprintln!("Error sending OK response to /increment request: {e}");
+                    }
                 },
                 "/get" => {
                     match arg {
                         Some(arg) => match arg {
                             0 => {
                                 eprintln!("Argument cannot be equal 0");
-                                respond(&mut stream, BAD_REQUEST);
+                                if let Err(e) = respond(&mut stream, BAD_REQUEST, None) {
+                                    eprintln!("Error sending response: {e}");
+                                }
                             }
                             _ => {
                                 self.send_counter_image(&mut stream, arg);
@@ -195,18 +199,24 @@ impl Counter {
                         }
                         None => {
                             eprintln!("Unparsable argument or wrong argument name");
-                            respond(&mut stream, BAD_REQUEST);
+                            if let Err(e) = respond(&mut stream, BAD_REQUEST, None) {
+                                eprintln!("Error sending response: {e}");
+                            }
                         }
                     }
                 }
                 _ => {
                     eprintln!("Unknown method: {method}");
-                    respond(&mut stream, BAD_REQUEST);
+                    if let Err(e) = respond(&mut stream, BAD_REQUEST, None) {
+                        eprintln!("Error sending response: {e}");
+                    }
                 }
             }
         } else {
             eprintln!("Malformed GET header: {http_request}");
-            respond(&mut stream, BAD_REQUEST);
+            if let Err(e) = respond(&mut stream, BAD_REQUEST, None) {
+                eprintln!("Error sending response: {e}");
+            }
         }
     }
 
@@ -263,11 +273,14 @@ impl Counter {
     }
 }
 
-fn respond(stream: &mut TcpStream, code: &str) {
-    let r = stream.write_all(format!("HTTP/1.1 {code}\r\n\r\n").as_bytes());
-    if let Err(e) = r {
-        eprintln!("Error sending a response {code}: {e}");
+fn respond(stream: &mut TcpStream, code: &str, content_type: Option<&str>) -> std::io::Result<()> {
+    stream.write_all(format!("HTTP/1.1 {code}\r\n").as_bytes())?;
+    if let Some(ctype) = content_type {
+        stream.write_all(format!("Content-Type: {ctype}\r\n").as_bytes())?;
     }
+    stream.write_all("\r\n".as_bytes())?;
+    
+    Ok(())
 }
 
 fn parse_arg(arg: &str) -> Option<u8> {
