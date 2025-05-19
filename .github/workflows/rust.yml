@@ -1,0 +1,57 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: x86_64-unknown-linux-musl
+        profile: minimal
+        override: true
+    - name: Build
+      run: cargo build --release --target x86_64-unknown-linux-musl
+    - name: Upload release artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: nobscount
+        path: target/x86_64-unknown-linux-musl/release/nobscount
+  
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    # Extract version from Cargo.toml
+    - name: Get version from Cargo.toml
+      id: cargo-version
+      run: |
+        echo "version=$(grep -m1 '^version =' Cargo.toml | cut -d '"' -f 2)" >> $GITHUB_OUTPUT
+    
+    - name: Download release artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: nobscount
+        path: ./release
+    
+    - name: Publish to GitHub Releases
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release create "v${{ steps.cargo-version.outputs.version }}" \
+          --generate-notes \
+          ./release/nobscount
