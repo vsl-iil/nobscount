@@ -1,10 +1,34 @@
-# counterfile = "count.bin"       # file to store counter value; default: "count.bin"
-# bind_addr = "127.0.0.1:1234"    # address to bind; default: "0.0.0.0:1234" (make sure to use firewall if you leave this value as is!)
-# image_dir = "img"               # path to directory with images of counter digits; default: "img/"
-# img_format = "jpeg"             # digits format; default: "jpeg"
-# content_type = "image/jpeg"     # Content-Type; default: "image/jpeg"
-# count_unique = false            # Count only unique visits. Each visit timestamp is saved; if the same IP visits the site before `timeout` seconds pass, then the counter doesn't register a visit; default: false 
-# timeout = 3600                  # timeout (see comment above), in seconds; default: 3600
-# blacklist = ["127.0.0.1"]       # IPs listed here won't increment the counter; default: []
-# useragent_regexes = [".*bot.*"] # list of regexes for user-agents that you want to exclude from count (e.g. crawler bots). ".*bot.*" is a good start to filter out crawlers; default: []
-# allow_empty_uas = false         # Count visits with no `User-Agent` header; default: false
+# file to store counter value; default: "count.bin"
+#counterfile = "count.bin"
+
+# address to bind; default: "0.0.0.0:1234" (make sure to use firewall if you 
+# leave this value as is!)
+#bind_addr = "127.0.0.1:1234"
+
+# path to directory with images of counter digits; default: "img/"
+#image_dir = "img"
+
+# digits format; default: "jpeg"
+#img_format = "jpeg"             
+
+# Content-Type; default: "image/jpeg"
+#content_type = "image/jpeg"
+
+# Count only unique visits. Each visit timestamp is saved; if the same IP visits
+# the site before `timeout` seconds pass, then the counter doesn't register a 
+# visit; default: false 
+#count_unique = false
+
+# timeout (see comment above), in seconds; default: 3600
+#timeout = 3600
+
+# IPs listed here won't increment the counter; default: []
+#blacklist = ["127.0.0.1"]
+
+# List of regexes for user-agents that you want to exclude from count (e.g. 
+# crawler bots). ["^[^(Mozilla)]", ".*\\(compatible;"] are a good start to 
+# filter out crawlers and bots; default: []
+#useragent_regexes = ["^[^(Mozilla)]", ".*\\(compatible;"] 
+
+# Count visits with no `User-Agent` header; default: false
+#allow_empty_uas = false         

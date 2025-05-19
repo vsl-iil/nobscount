@@ -1,8 +1,10 @@
 use std::{collections::HashMap, fs::File, io::{BufRead, BufReader, BufWriter, Read, Write}, net::{IpAddr, TcpListener, TcpStream}, process::exit, str::from_utf8, time::Instant};
 use regex::Regex;
 use toml::Table;
+use util::{kill_old_counter, remove_pid_file};
 
 #[macro_use] mod util;
+mod single;
 
 const COUNTER_FILE: &str = "count.bin";
 
@@ -48,7 +50,66 @@ const BAD_REQUEST: &str = "400 Bad Request";
 // const TEAPOT: &str = "418 I'm a teapot";
 const INTERNAL_ERROR: &str = "500 Internal Server Error";
 
+const INSTANCE_UUID: &str = "1e5319b4-73ca-447d-a05d-eca92225ebb9";
+
 fn main() {
+    let single = single::SingleInstance::new(INSTANCE_UUID);
+    let mut single = single.ok();
+    
+    if single.as_ref().is_some_and(|inst| !inst.is_single()) {
+        loop {
+            eprint!("Another counter instance is running. Do you want to stop that old instance? (y/N) > ");
+
+            let mut choice = String::new();
+            match std::io::stdin().read_line(&mut choice) {
+                Err(e) => {
+                    eprintln!("Error reading user input: {e}. Exiting...");
+                    exit(1);
+                }
+                Ok(_) => {},
+            }
+
+            match choice.trim() {
+                "y" | "Y" => {
+                    kill_old_counter().expect("Unable to kill an old instance. Maybe it's running as root?");
+
+                    let mut retries = 20;
+                    while single.as_ref().is_none_or(|inst| !inst.is_single()) && retries > 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                        single = single::SingleInstance::new(INSTANCE_UUID).ok();
+                        retries -= 1;
+                    }
+                    if single.as_ref().is_none_or(|inst| !inst.is_single()) {
+                        debugprint!("Wasn't able to reaquire a socket. Proceeding anyway...");
+                    }
+                    break;
+                },
+                "n" | "N" | "" => break,
+                _ => eprintln!("Please, choose `y` or `n`."),
+            }
+        }
+    }
+
+    if single.as_ref().is_some_and(|inst| inst.is_single()) {
+        let pid = nix::unistd::getpid().as_raw().to_string();
+        if let Err(e) = std::fs::write(".counter.pid", pid.clone()) {
+            debugprint!("Unable to write PID in current directory. Trying temp directory... ", e);
+            
+            let mut tmp = std::env::temp_dir();
+            tmp.set_file_name(".counter.pid");
+            if let Err(e) = std::fs::write(tmp, pid) {
+                debugprint!("Unable to write PID to a file. Another instance won't be able to kill this one.", e);
+            }
+        }
+    }
+
+    if let Err(e) = ctrlc::set_handler(|| {
+        remove_pid_file();
+        exit(0);
+    }) {
+        debugprint!("Unable to set SIGINT handler. PID file won't be removed; ", e);
+    }
+
     let mut config: Config = Config::default();
     load_config_from_file(&mut config, "config.toml");
 
@@ -87,6 +148,8 @@ fn main() {
         counter.clear_timedout();
         counter.handle_connection(stream);
     }
+
+    remove_pid_file();
 }
 
 struct Counter {
