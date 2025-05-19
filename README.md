@@ -32,6 +32,8 @@ conflicts.
 3. Copy an executable `nobscount` from `target/release` or 
    `target/x86_64-unknown-linux-musl/release` somewhere.
 
+> Alternatively, you can just download a binary from Releases.
+
 4. Run it:
 
 ```
